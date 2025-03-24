@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Preset Embedded Dashboard with Auto Refresh</title>
+  <!-- Load the Preset Embedded SDK (adjust the version if needed) -->
+  <script src="https://unpkg.com/@preset-sdk/embedded"></script>
+</head>
+<body>
+  <!-- Container where the dashboard will be embedded -->
+  <div id="my-superset-container" class="embedded-superset"></div>
+  <p>WWWWWWWWWWWWWWWW</p>
+
+  <script>
+    /**
+     * 1. Function to fetch the guest token from your Cloudflare Worker.
+     *    This Worker should be returning { "token": "<SIGNED_JWT>" }.
+     */
+    async function fetchGuestToken() {
+      try {
+        const response = await fetch('https://kwfl-preset-embed-worker.kwfl.workers.dev/api/embed-token');
+        if (!response.ok) {
+          throw new Error('Failed to fetch guest token');
+        }
+        const data = await response.json();
+        return data.token;
+      } catch (error) {
+        console.error('Error fetching guest token:', error);
+        return null; // or handle the error in another way
+      }
+    }
+
+    /**
+     * 2. Embed the dashboard using the Preset Embedded SDK.
+     *    This function now returns the promise that resolves to the dashboard instance.
+     */
+    function embedDashboard() {
+      console.log('Embedding (or re-embedding) the dashboard...');
+      return presetSdk.embedDashboard({
+        id: "b477b781-e1a2-492b-9cd6-ef36d1879fb5",
+        supersetDomain: "https://af218376.us1a.app.preset.io",
+        mountPoint: document.getElementById("my-superset-container"),
+        fetchGuestToken,    // Provide the function above
+        dashboardUiConfig: {
+            // Dashboard UI config options
+            hideTitle: false,
+            hideChartControls: false,
+            filters: {
+              expanded: true,
+            },
+            urlParams: {
+              param_name: "value",
+              other_param: "value"
+            }
+        }
+      });
+    }
+
+    // 3. Immediately embed the dashboard and store the instance promise.
+    let dashboardInstancePromise = embedDashboard();
+
+    // 4. Automatically refresh (re-embed) the dashboard every 4 minutes (240000 ms).
+    const REFRESH_INTERVAL_MS = 4 * 60 * 1000;
+    setInterval(() => {
+      console.log('Refreshing guest token and re-embedding dashboard...');
+      // Update the stored promise with the new dashboard instance.
+      dashboardInstancePromise = embedDashboard();
+    }, REFRESH_INTERVAL_MS);
+
+    /**
+     * 5. Function to adjust the dashboard's iframe size based on its scroll size.
+     *    This follows the approach described in the Preset docs.
+     */
+    async function resizeIframe() {
+      const myDashboard = await dashboardInstancePromise;
+      if (!myDashboard || typeof myDashboard.getScrollSize !== 'function') {
+        console.error("Dashboard instance or getScrollSize() is not available.");
+        return;
+      }
+      setInterval(async () => {
+        try {
+          console.log(myDashboard);
+          // getScrollSize() returns a promise that resolves to an object with width and height.
+          const { width, height } = await myDashboard.getScrollSize();
+          console.log('w:' + width + 'h:' + height);
+          // Find the iframe inside the embedded dashboard container.
+          const iframe = document.querySelector(".embedded-superset iframe");
+          if (iframe) {
+            iframe.style.width = "98vw";
+            iframe.style.height = "98vh";
+          }
+        } catch (err) {
+          console.error("Error resizing dashboard:", err);
+        }
+      }, 1000);
+    }
+    resizeIframe();
+  </script>
+</body>
+</html>
